@@ -244,7 +244,6 @@ def selective_search(image_orig, scale=1.0, sigma=0.8, min_size=50):
         image: np.ndarray,
             image with region label
             region label is stored in the 4th value of each pixel [r,g,b,(region)]
-        regions: array of dict 对
             [
                 {
                     'rect': (left, top, width, height),
