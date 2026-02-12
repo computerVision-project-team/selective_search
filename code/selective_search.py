@@ -222,7 +222,7 @@ def extract_neighbours(regions):
         for idx2 in range(idx1 + 1, len(items)):
             b_id, b = items[idx2]
 
-            if intersect(a, b):
+            if intersect(a, b) or intersect(b, a):
                 neighbours.append(((a_id, a), (b_id, b)))
 
     return neighbours
@@ -306,7 +306,7 @@ def selective_search(image_orig, scale=1.0, sigma=0.8, min_size=50, max_merges=N
         i, j = sorted(S.items(), key=lambda i: i[1])[-1][0]
 
         # Task 4: Merge corresponding regions. Refer to function "merge_regions"
-        t = max(R.keys()) + 1.0
+        t = max(R.keys()) + 1
         R[t] = merge_regions(R[i], R[j])
         merges += 1
         if max_merges is not None and merges >= max_merges:
@@ -314,7 +314,7 @@ def selective_search(image_orig, scale=1.0, sigma=0.8, min_size=50, max_merges=N
 
         # Task 5: Mark similarities for regions to be removed
         keys_to_delete = []
-        for (a, b) in S.keys():
+        for (a, b) in list(S.keys()):
             if a in (i, j) or b in (i, j):
                 keys_to_delete.append((a, b))
 
@@ -338,7 +338,7 @@ def selective_search(image_orig, scale=1.0, sigma=0.8, min_size=50, max_merges=N
         for k in list(R.keys()):
             if k == t:
                 continue
-            if intersect_bbox(R[t], R[k]):
+            if intersect_bbox(R[t], R[k]) or intersect_bbox(R[k], R[t]):
                 a, b = (t, k) if t < k else (k, t)
                 S[(a, b)] = calc_sim(R[a], R[b], imsize)
 

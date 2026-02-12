@@ -17,6 +17,7 @@ import matplotlib.patches as mpatches
 import skimage.transform
 import skimage.util
 import numpy as np
+from tqdm import tqdm
 
 from selective_search import selective_search
 
@@ -65,11 +66,11 @@ def process_image(image_path, results_dir):
         min_rect_size = 500
         max_aspect = 2.5
     else:
-        scale = 500
-        min_size = 20
-        max_merges = None
-        min_rect_size = 2000
-        max_aspect = 1.2
+        scale = 200
+        min_size = 40
+        max_merges = 4000
+        min_rect_size = 800
+        max_aspect = 1.5
 
     t0 = time.time()
     image_label, regions = selective_search(
@@ -130,15 +131,23 @@ def main():
     domains = ["chrisarch", "arthist", "classarch"]
     exts = {".jpg", ".jpeg", ".png", ".bmp"}
 
+    # build image list for simple progress reporting
+    image_list = []
     for d in domains:
         in_dir = os.path.join(data_root, d)
-        out_dir = os.path.join(results_root, d)
         if not os.path.isdir(in_dir):
-            print("Missing data dir:", in_dir)
             continue
         for name in sorted(os.listdir(in_dir)):
             if os.path.splitext(name.lower())[1] in exts:
-                process_image(os.path.join(in_dir, name), out_dir)
+                image_list.append((d, os.path.join(in_dir, name)))
+
+    total = len(image_list)
+    idx = 0
+
+    for d, img_path in tqdm(image_list, total=total, desc="selective search"):
+        idx += 1
+        out_dir = os.path.join(results_root, d)
+        process_image(img_path, out_dir)
 
 
 if __name__ == "__main__":

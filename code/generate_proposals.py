@@ -1,5 +1,5 @@
 """
-Generate selective search region proposals for the balloon dataset (train/valid).
+Generate selective search region proposals for the balloon dataset.
 Task 5.2.1: save proposals to disk so later steps can reuse them.
 """
 
@@ -39,10 +39,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", default="../data/balloon_dataset")
     parser.add_argument("--out_root", default="../data/balloon_dataset/proposals")
-    parser.add_argument("--splits", nargs="+", default=["train", "valid"])
-    parser.add_argument("--scale", type=float, default=500)
+    parser.add_argument("--splits", nargs="+", default=["train", "valid", "test"])
+    parser.add_argument("--scale", type=float, default=300)
     parser.add_argument("--sigma", type=float, default=0.8)
-    parser.add_argument("--min_size", type=int, default=20)
+    parser.add_argument("--min_size", type=int, default=50)
     parser.add_argument("--max_merges", type=int, default=None)
     args = parser.parse_args()
 
