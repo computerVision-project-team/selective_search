@@ -1,0 +1,203 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\title{Exercise 5.2 Report (10 ECTS)}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Exercise 5.2 Implementation Summary}
+
+\subsection*{Task 5.2.1: Proposal Generation and Caching}
+Implemented in \texttt{code/generate\_proposals.py}.
+\begin{itemize}[leftmargin=1.5em]
+\item For each split (\texttt{train}, \texttt{valid}, \texttt{test}), load images and run \texttt{selective\_search(...)}.
+\item Save proposals as compressed \texttt{.npz} files with one array \texttt{rects} (\texttt{N x 4}, \((x,y,w,h)\)).
+\item Output structure: \texttt{data/balloon\_dataset/proposals/<split>/<image>.npz}.
+\item This avoids recomputing selective search during training/evaluation.
+\end{itemize}
+
+\subsection*{Task 5.2.2: Positive/Negative Samples from IoU}
+Implemented in \texttt{code/detector\_pipeline.py} (\texttt{build\_samples()}).
+\begin{itemize}[leftmargin=1.5em]
+\item Load COCO annotations and proposals, then compute \(\max\) IoU of each proposal with all GT boxes.
+\item Label positive if \(\max IoU \ge t_p\); label negative if \(\max IoU \le t_n\).
+\item Per-image caps are applied (\texttt{max\_pos\_per\_img}, \texttt{max\_neg\_per\_img}) to control imbalance and runtime.
+\item Ambiguous proposals in \((t_n, t_p)\) are ignored.
+\end{itemize}
+
+\subsection*{Task 5.2.2: Feature Extraction}
+Implemented in \texttt{code/detector\_pipeline.py}, \texttt{code/run\_inference.py}, and \texttt{code/evaluate\_metrics.py}.
+
+\paragraph{HOG option}
+\begin{itemize}[leftmargin=1.5em]
+\item Resize crop to \texttt{out\_size x out\_size} and compute HOG:
+\texttt{orientations=9}, \texttt{pixels\_per\_cell=(8,8)}, \texttt{cells\_per\_block=(2,2)}, \texttt{channel\_axis=-1}.
+\end{itemize}
+
+\paragraph{CNN option (used in final result)}
+\begin{itemize}[leftmargin=1.5em]
+\item Pretrained ResNet18 (\texttt{torchvision}), \texttt{fc} replaced with \texttt{Identity} to get 512-D features.
+\item Preprocess: \texttt{Resize((224,224))}, \texttt{ToTensor()}, ImageNet normalization
+(\([0.485, 0.456, 0.406]\), \([0.229, 0.224, 0.225]\)).
+\item Apply L2 normalization on each 512-D feature vector.
+\item Training and inference use the same preprocessing and feature extraction.
+\end{itemize}
+
+\subsection*{Task 5.2.3: SVM Training}
+Implemented in \texttt{code/detector\_pipeline.py}.
+\begin{itemize}[leftmargin=1.5em]
+\item Classifier: \texttt{LinearSVC(class\_weight='balanced', max\_iter=5000)}.
+\item Validate on \texttt{valid} split and print \texttt{classification\_report}.
+\item Save model with \texttt{joblib} to \texttt{results/balloon\_svm.joblib}.
+\item Optional hard-negative mining:
+after first training round, collect top-scoring false positives (\(\max IoU \le t_n\)),
+append them as extra negatives, and retrain.
+\end{itemize}
+
+\subsection*{Task 5.2.4: Inference Script}
+Implemented in \texttt{code/run\_inference.py}.
+\begin{itemize}[leftmargin=1.5em]
+\item For one input image: generate proposals, extract features, run SVM \texttt{decision\_function}.
+\item Filter by \texttt{score\_thresh}, apply NMS (\texttt{nms\_thresh}), keep top-\(k\) boxes.
+\item Save visualization with red boxes to output image.
+\end{itemize}
+
+\subsection*{Task 5.2.5: Evaluation (COCO mAP + MABO)}
+Implemented in \texttt{code/evaluate\_metrics.py}.
+\begin{itemize}[leftmargin=1.5em]
+\item Evaluate on \texttt{test} split with official \texttt{pycocotools} COCOeval:
+AP@[0.50:0.95], AP@0.50.
+\item Before submission to COCOeval, apply score filter + NMS + top-\(k\) to reduce duplicate false positives.
+\item Supports cached test proposals (\texttt{--proposals\_root}); otherwise falls back to on-the-fly selective search.
+\item MABO is computed as mean best overlap between each GT and all proposals of the same image.
+\end{itemize}
+
+\section*{Final Configuration and Results}
+
+\subsection*{Configuration used for reported result}
+\begin{itemize}[leftmargin=1.5em]
+\item Proposal generation: \texttt{scale=300}, \texttt{min\_size=50}, \texttt{max\_merges=3500}.
+\item Training: \texttt{feature=cnn}, \texttt{tp=0.5}, \texttt{tn=0.2},
+\texttt{max\_pos\_per\_img=100}, \texttt{max\_neg\_per\_img=30},
+\texttt{augment=True}, \texttt{aug\_pos=5}, \texttt{hard\_neg=True}.
+\item Evaluation: \texttt{feature=cnn}, \texttt{score\_thresh=-1.0},
+\texttt{nms\_thresh=0.3}, \texttt{top\_k=100}, cached test proposals.
+\end{itemize}
+
+\subsection*{Metrics}
+\begin{center}
+\begin{tabular}{lc}
+\toprule
+Metric & Value \\
+\midrule
+mAP (IoU 0.50:0.95) & 0.1149 \\
+AP@0.50 & 0.4556 \\
+MABO & 0.6020 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection*{Short Analysis}
+\begin{itemize}[leftmargin=1.5em]
+\item AP@0.50 is much higher than mAP@[0.50:0.95], indicating detection is often correct but localization is not always tight at high IoU.
+\item MABO around 0.60 suggests proposals have reasonable recall/coverage.
+\item Main remaining errors are duplicated/partial boxes and occasional confusing negatives (e.g., face/head-like round regions).
+\end{itemize}
+
+\section*{Q5.2 Answers}
+
+\subsection*{Q5.2.1}
+Compared to Uijlings et al., this implementation is simplified:
+\begin{itemize}[leftmargin=1.5em]
+\item Uses one selective search configuration instead of full diversification across color spaces and multiple initializations.
+\item Uses CNN (or HOG) features + linear SVM, rather than the original SIFT-based pipeline and full paper setup.
+\item Uses a lightweight hard-negative step (single optional retraining loop), not a fully iterative mining/training regime.
+\item No bounding-box regression/post-refinement stage.
+\end{itemize}
+
+\subsection*{Q5.2.2}
+Changing thresholds affects sample quality/quantity:
+\begin{itemize}[leftmargin=1.5em]
+\item Higher \(t_p\): cleaner positives, fewer samples.
+\item Lower \(t_p\): more positives, but noisier labels.
+\item Lower \(t_n\): cleaner negatives (farther from object), often easier.
+\item Higher \(t_n\): harder negatives, but risk of mislabeled near-object samples.
+\end{itemize}
+Two thresholds are needed to create a gray zone \((t_n, t_p)\) that excludes ambiguous proposals.
+With one threshold, many borderline samples would be forced into wrong labels and hurt SVM training.
+
+\subsection*{Q5.2.3}
+Ways to increase effective training data:
+\begin{itemize}[leftmargin=1.5em]
+\item Stronger data augmentation for positive crops (flip, brightness/contrast/color jitter, random affine/crop).
+\item Increase proposals and lower \(t_p\) slightly to collect more positives, then clean with hard-negative mining.
+\item Add external balloon-like data (same class) and convert to COCO-format boxes.
+\item Use pseudo-labeling from high-confidence detections on unlabeled images.
+\item Perform k-fold cross-validation and model averaging on a small dataset.
+\end{itemize}
+
+\section*{Reproducibility}
+
+\subsection*{Dependencies}
+\begin{verbatim}
+pip install -r requirements.txt
+pip install pycocotools torch torchvision
+\end{verbatim}
+
+\subsection*{Commands}
+\paragraph{1) Generate proposals}
+\begin{verbatim}
+python3 code/generate_proposals.py \
+  --data_root data/balloon_dataset \
+  --out_root data/balloon_dataset/proposals \
+  --splits train valid test \
+  --scale 300 --min_size 50 --max_merges 3500
+\end{verbatim}
+
+\paragraph{2) Train detector}
+\begin{verbatim}
+python3 code/detector_pipeline.py \
+  --data_root data/balloon_dataset \
+  --proposals_root data/balloon_dataset/proposals \
+  --feature cnn \
+  --tp 0.5 --tn 0.2 \
+  --max_pos_per_img 100 --max_neg_per_img 30 \
+  --augment --aug_pos 5 \
+  --hard_neg \
+  --model_out results/balloon_svm.joblib
+\end{verbatim}
+
+\paragraph{3) Evaluate}
+\begin{verbatim}
+python3 code/evaluate_metrics.py \
+  --data_root data/balloon_dataset \
+  --proposals_root data/balloon_dataset/proposals \
+  --model results/balloon_svm.joblib \
+  --feature cnn \
+  --score_thresh -1.0 \
+  --nms_thresh 0.3 \
+  --top_k 100
+\end{verbatim}
+
+\paragraph{4) Single-image inference visualization}
+\begin{verbatim}
+python3 code/run_inference.py \
+  --image data/balloon_dataset/valid/<image_name>.jpg \
+  --model results/balloon_svm.joblib \
+  --feature cnn \
+  --score_thresh 0.1 \
+  --nms_thresh 0.4 \
+  --top_k 50 \
+  --out results/inference.png
+\end{verbatim}
+
+\end{document}

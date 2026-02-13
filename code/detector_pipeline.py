@@ -3,7 +3,7 @@ Simple detection pipeline for Exercise 5.2 (balloon dataset).
 Steps:
 1) Load selective search proposals (npz with rects)
 2) Build positive/negative samples by IoU thresholds
-3) Extract HOG features
+3) Extract HOG/CNN features
 4) Train linear SVM and evaluate on valid split
 """
 
@@ -28,6 +28,10 @@ except Exception:  # pragma: no cover
     models = None
     transforms = None
     ResNet18_Weights = None
+
+
+IMAGENET_MEAN = [0.485, 0.456, 0.406]
+IMAGENET_STD = [0.229, 0.224, 0.225]
 
 
 def load_coco_boxes(ann_path):
@@ -186,17 +190,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_root", default="../data/balloon_dataset")
     parser.add_argument("--proposals_root", default="../data/balloon_dataset/proposals")
-    parser.add_argument("--tp", type=float, default=0.6)
+    parser.add_argument("--tp", type=float, default=0.5)
     parser.add_argument("--tn", type=float, default=0.3)
     parser.add_argument("--out_size", type=int, default=128)
     parser.add_argument("--max_pos_per_img", type=int, default=50)
-    parser.add_argument("--max_neg_per_img", type=int, default=50)
+    parser.add_argument("--max_neg_per_img", type=int, default=20)
     parser.add_argument("--model_out", default="../results/balloon_svm.joblib")
     parser.add_argument("--feature", choices=["hog", "cnn"], default="hog")
     parser.add_argument("--hard_neg", action="store_true", help="Enable hard negative mining")
     parser.add_argument("--hn_per_img", type=int, default=20)
-    parser.add_argument("--augment", action="store_true", help="Enable training-time augmentation on positive samples")
-    parser.add_argument("--aug_pos", type=int, default=1, help="Number of augmented copies per positive sample")
+    parser.add_argument("--augment", dest="augment", action="store_true", help="Enable training-time augmentation on positive samples")
+    parser.add_argument("--no_augment", dest="augment", action="store_false", help="Disable training-time augmentation on positive samples")
+    parser.add_argument("--aug_pos", type=int, default=10, help="Number of augmented copies per positive sample")
+    parser.set_defaults(augment=True)
     args = parser.parse_args()
 
     data_root = os.path.abspath(args.data_root)
@@ -215,7 +221,11 @@ def main():
         if torch is None:
             raise RuntimeError("PyTorch/torchvision not installed. Install torch and torchvision to use CNN features.")
         weights = ResNet18_Weights.DEFAULT
-        preprocess = weights.transforms()
+        preprocess = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD),
+        ])
         feature_model = models.resnet18(weights=weights)
         feature_model.fc = torch.nn.Identity()
         feature_model.eval()

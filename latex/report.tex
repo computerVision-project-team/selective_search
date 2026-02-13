@@ -1,0 +1,77 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=1in]{geometry}
+\usepackage{enumitem}
+
+\title{Exercise 5.1 Report}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section*{Exercise 5.1 Implementation Summary}
+
+\subsection*{Implemented Tasks (5.1--5.8)}
+All required parts are implemented in \texttt{code/selective\_search.py}.
+\begin{itemize}[leftmargin=1.5em]
+\item \textbf{Task 5.1} Initial segmentation: \texttt{generate\_segments()} uses Felzenszwalb and stores integer labels.
+\item \textbf{Task 5.2} Region extraction and similarity terms:
+\begin{itemize}[leftmargin=1.5em]
+\item Color histogram and color similarity: \texttt{calc\_colour\_hist()}, \texttt{sim\_colour()}.
+\item Texture feature and texture similarity: \texttt{calc\_texture\_gradient()}, \texttt{calc\_texture\_hist()}, \texttt{sim\_texture()}.
+\item Size similarity: \texttt{sim\_size()}.
+\item Fill/shape compatibility: \texttt{sim\_fill()}.
+\end{itemize}
+\item \textbf{Task 5.3} Neighbor extraction: \texttt{extract\_neighbours()}.
+\item \textbf{Task 5.4} Region merging: \texttt{merge\_regions()}.
+\item \textbf{Task 5.5 \& 5.6} Marking and removing old similarities in the main merge loop of \texttt{selective\_search()}.
+\item \textbf{Task 5.7} Recomputing similarities for the newly merged region in the same loop.
+\item \textbf{Task 5.8} Final proposal generation (\texttt{rect}, \texttt{size}, \texttt{labels}) at the end of \texttt{selective\_search()}.
+\end{itemize}
+
+\subsection*{Parameter Settings}
+Current parameter settings in \texttt{code/main.py}:
+\begin{itemize}[leftmargin=1.5em]
+\item \texttt{FAST\_MODE = False}: \texttt{scale=200}, \texttt{min\_size=40}, \texttt{max\_merges=4000}, \texttt{min\_rect\_size=800}, \texttt{max\_aspect=1.5}.
+\item \texttt{FAST\_MODE = True}: \texttt{scale=150}, \texttt{min\_size=80}, \texttt{max\_merges=3500}, \texttt{min\_rect\_size=500}, \texttt{max\_aspect=2.5}.
+\item \texttt{sigma} uses the default value from \texttt{selective\_search(..., sigma=0.8)}.
+\end{itemize}
+
+\subsection*{Result Locations for the Three Domains}
+The script \texttt{code/main.py} processes all three folders and saves outputs to:
+\begin{itemize}[leftmargin=1.5em]
+\item \texttt{results/chrisarch/}
+\item \texttt{results/arthist/}
+\item \texttt{results/classarch/}
+\end{itemize}
+
+\section*{Q5.1 Answers}
+
+\subsection*{Q5.1.1}
+Felzenszwalb provides a single flat segmentation for one parameter setting. Object detection needs multi-scale object candidates.
+Selective Search starts from small segments and hierarchically merges them, generating many candidate boxes at different scales, which improves proposal recall.
+
+\subsection*{Q5.1.2}
+Proposal filtering in \texttt{main.py} applies three criteria:
+\begin{itemize}[leftmargin=1.5em]
+\item remove duplicate rectangles,
+\item remove very small regions (\texttt{size < min\_rect\_size}),
+\item remove highly distorted boxes using aspect ratio threshold (\texttt{max\_aspect}).
+\end{itemize}
+Effect: fewer noisy boxes and cleaner visualization, but possible loss of true positives (especially small or elongated objects).
+I agree with these criteria as a baseline.
+Additional useful criteria: score ranking, border-touch filtering, or NMS for heavy overlaps.
+
+\subsection*{Q5.1.3}
+Selective Search merges arbitrary regions, but each region keeps a bounding box.
+The final box proposals are obtained by converting each region to its axis-aligned bounding rectangle \((x, y, w, h)\), stored as \texttt{rect}.
+
+\subsection*{Q5.1.4}
+Increasing the Felzenszwalb scale (or equivalently larger initial segment preference) generally creates larger initial regions and fewer proposals.
+This reduces runtime but may miss small objects.
+Increasing the number of proposals usually improves overlap/recall metrics first, then saturates, while runtime and false positives increase.
+
+\end{document}
